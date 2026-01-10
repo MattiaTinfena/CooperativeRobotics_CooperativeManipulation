@@ -44,13 +44,15 @@ arm2.set_obj_goal(wTog)
 %Define Tasks, input values(Robot type(L,R,BM), Task Name)
 left_tool_task=tool_task("L","LT");
 right_tool_task=tool_task("R","RT");
+left_minimun_altitude_task=minimum_altitude_task("L","LMA");
+right_minimun_altitude_task=minimum_altitude_task("R","RMA");
 
-task_list = {left_tool_task, right_tool_task};
-task_list_name = ["LTT", "RTT"];
+task_list = {left_tool_task, right_tool_task, left_minimun_altitude_task, right_minimun_altitude_task};
+task_list_name = ["LTT", "RTT", "LMAT", "RMAT"];
 
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
-go_to = ["LTT", "RTT"];
+go_to = ["LMAT", "RMAT", "LTT", "RTT"];
 
 %Load Action Manager Class and load actions
 actionManager = ActionManager();
