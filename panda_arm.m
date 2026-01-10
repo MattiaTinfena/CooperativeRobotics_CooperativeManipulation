@@ -82,7 +82,7 @@ classdef panda_arm < handle
 
             obj.bTe=getTransform(obj.robot_model.franka,[obj.q',0,0],'panda_link7');
             obj.wTe=obj.wTb*obj.bTe;
-            obj.wTt =obj.wTe;
+            obj.wTt =obj.wTe*obj.eTt;
             
         end
         function update_jacobian(obj)
