@@ -46,13 +46,14 @@ left_tool_task=tool_task("L","LT");
 right_tool_task=tool_task("R","RT");
 left_minimun_altitude_task=minimum_altitude_task("L","LMA");
 right_minimun_altitude_task=minimum_altitude_task("R","RMA");
-
-task_list = {left_tool_task, right_tool_task, left_minimun_altitude_task, right_minimun_altitude_task};
-task_list_name = ["LTT", "RTT", "LMAT", "RMAT"];
+left_joint_limit_task=joint_limit_task("L","LJL");
+right_joint_limit_task=joint_limit_task("R","RJL");
+task_list = {left_tool_task, right_tool_task, left_minimun_altitude_task, right_minimun_altitude_task, left_joint_limit_task, right_joint_limit_task};
+task_list_name = ["LTT", "RTT", "LMAT", "RMAT", "LJLT", "RJLT"];
 
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
-go_to = ["LMAT", "RMAT", "LTT", "RTT"];
+go_to = ["LJLT", "RJLT", "LMAT", "RMAT", "LTT", "RTT"];
 
 %Load Action Manager Class and load actions
 actionManager = ActionManager();

@@ -17,7 +17,7 @@ classdef minimum_altitude_task < Task
             end
         
             robot.alt = robot.wTt(3,4);
-            disp(robot.alt);
+
             if size(robot.alt) == 1
                 obj.xdotbar = -0.2 * max(0, (0.15 - robot.alt));
             else
@@ -36,9 +36,9 @@ classdef minimum_altitude_task < Task
             
             n = [0 0 0 0 0 1];
             if obj.ID=='L'
-                obj.J=n*[tool_jacobian, zeros(6, 7)];
+                obj.J = n * [tool_jacobian, zeros(6, 7)];
             elseif obj.ID=='R'
-                obj.J=n*[zeros(6, 7), tool_jacobian];
+                obj.J = n * [zeros(6, 7), tool_jacobian];
             end
 
         end

@@ -48,7 +48,7 @@ classdef panda_arm < handle
 
             %Default Limits
             obj.jlmin=[-2.8973;-1.7628;-2.8973;-3.0718;-2.8973;-0.0175;-2.8973];
-            obj.jlmax=[2.8973;1.7628;2.8973;-0.0698;2.8973;3.7525;2.8973];
+            obj.jlmax=[2.8973; 1.7628; 2.8973;-0.0698; 2.8973; 3.7525; 2.8973];
 
             % FIXED END EFFECTOR
             theta = -44.9949;% FIXED ANGLE BETWEEN EE AND TOOL 
