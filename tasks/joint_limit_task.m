@@ -1,22 +1,23 @@
-classdef joint_limit_task < Task   
+classdef joint_limit_task < Task
     %Tool position control for a single arm
     properties
         delta = deg2rad(10);
     end
 
     methods
-        function obj=joint_limit_task(robot_ID,taskID)
+        function obj=joint_limit_task(robot_ID,taskID, smooth)
             obj.ID=robot_ID;
             obj.task_name=taskID;
+            obj.smooth=smooth;
         end
 
         function updateReference(obj, robot_system)
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot_system.right_arm;    
+                robot=robot_system.right_arm;
             end
-            
+
             err_min = robot.q - (robot.jlmin + obj.delta);
             err_max = robot.q - (robot.jlmax - obj.delta);
 
@@ -40,9 +41,9 @@ classdef joint_limit_task < Task
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot_system.right_arm;    
+                robot=robot_system.right_arm;
             end
-            
+
             lim_inf = [0 0 0 0 0 0 0]';
             lim_sup = [1 1 1 1 1 1 1]';
             A_max = arrayfun(@IncreasingBellShapedFunction,(robot.jlmax - obj.delta), robot.jlmax, lim_inf, lim_sup, robot.q);

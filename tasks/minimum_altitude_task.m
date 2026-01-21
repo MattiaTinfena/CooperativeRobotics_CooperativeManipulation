@@ -1,21 +1,22 @@
-classdef minimum_altitude_task < Task   
+classdef minimum_altitude_task < Task
     %Tool position control for a single arm
     properties
 
     end
 
     methods
-        function obj=minimum_altitude_task(robot_ID,taskID)
+        function obj=minimum_altitude_task(robot_ID,taskID, smooth)
             obj.ID=robot_ID;
             obj.task_name=taskID;
+            obj.smooth=smooth;
         end
         function updateReference(obj, robot_system)
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot_system.right_arm;    
+                robot=robot_system.right_arm;
             end
-        
+
             robot.alt = robot.wTt(3,4);
 
             if size(robot.alt) == 1
@@ -30,10 +31,10 @@ classdef minimum_altitude_task < Task
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot_system.right_arm;    
+                robot=robot_system.right_arm;
             end
             tool_jacobian=robot.wJt;
-            
+
             n = [0 0 0 0 0 1];
             if obj.ID=='L'
                 obj.J = n * [tool_jacobian, zeros(6, 7)];
@@ -47,7 +48,7 @@ classdef minimum_altitude_task < Task
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot_system.right_arm;    
+                robot=robot_system.right_arm;
             end
 
             if size(robot.alt) == 1

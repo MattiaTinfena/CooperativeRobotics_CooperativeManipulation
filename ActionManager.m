@@ -16,23 +16,6 @@ classdef ActionManager < handle
     end
 
     methods
-        % function addAction(obj, taskStack, name)
-        %     % taskStack: cell array of tasks that define an action
-        %     obj.actions_tag{end+1} = taskStack;
-        %     for i=1:length(taskStack)
-        %         for j=1:length(obj.all_task_names)
-        %             if taskStack(i) == obj.all_task_names(j)
-        %                 obj.actionsTest{end+1} = obj.all_task_list{j};
-        %             end
-        %         end
-        %     end
-        %     obj.actions{end+1} = obj.actionsTest;
-        %     obj.actionsTest = {};
-        %     disp(obj.actions_tag)
-        %     disp(obj.actions)
-        %     disp(obj.actionsTest)
-        %     obj.actions_names{end+1} = name;
-        % end
 
         function addAction(obj, taskStack, name)
             % taskStack: cell array di nomi task (string/char)
@@ -73,7 +56,11 @@ classdef ActionManager < handle
                 if(length(obj.ap_instructions) == length(obj.tasks))
                     for i = 1:length(obj.tasks)
                         if(obj.ap_instructions(i) == 1)
-                            ap{end + 1} = IncreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
+                            if(obj.tasks{i}.smooth)
+                                ap{end + 1} = IncreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
+                            else
+                                ap{end + 1} = 1;
+                            end
                         elseif(obj.ap_instructions(i) == -1)
                             ap{end + 1} = DecreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
                         else
@@ -113,74 +100,66 @@ classdef ActionManager < handle
             Qp = eye(14);
             for i = 1:length(obj.tasks)
                 [Qp, ydotbar] = iCAT_task(obj.tasks{i}.A * ap{i}, obj.tasks{i}.J, ...
-                                           Qp, ydotbar, obj.tasks{i}.xdotbar, ...
-                                           1e-4, 0.01, 10);
+                    Qp, ydotbar, obj.tasks{i}.xdotbar, ...
+                    1e-4, 0.01, 10);
             end
 
             % 3. Last task: residual damping
             [~, ydotbar] = iCAT_task(eye(14), eye(14), Qp, ydotbar, zeros(14,1), 1e-4, 0.01, 10);
         end
 
-    function setCurrentAction(obj, actionName, time)
+        function setCurrentAction(obj, actionName, time)
 
-        found = false;
+            found = false;
 
-        for i = 1:length(obj.actions_names)
-            if strcmp(obj.actions_names{i}, actionName)
-                obj.previous_action = obj.current_action;
-                obj.current_action = i;
-                obj.action_changes = 1;
-                obj.initial_time = time;
-                found = true;
-                break; % esci dal ciclo
+            for i = 1:length(obj.actions_names)
+                if strcmp(obj.actions_names{i}, actionName)
+                    obj.previous_action = obj.current_action;
+                    obj.current_action = i;
+                    obj.action_changes = 1;
+                    obj.initial_time = time;
+                    found = true;
+                    break; % esci dal ciclo
+                end
             end
+
+            if ~found
+                error('Action not found');
+            end
+
+            act_tags  = obj.actions_tag{obj.current_action};
+            prev_tags = obj.actions_tag{obj.previous_action};
+
+            % Unione stabile dei tag
+            all_tags = unique([prev_tags, act_tags], 'stable');
+
+            % Mappa tag → task object
+            [tf_all, idx_all] = ismember(all_tags, obj.all_task_names);
+            obj.tasks = obj.all_task_list(idx_all(tf_all));
+
+            % Membership
+            in_act  = ismember(all_tags, act_tags);
+            in_prev = ismember(all_tags, prev_tags);
+
+            % Preallocazione
+            obj.ap_instructions = zeros(1, numel(all_tags));
+
+            % Regole
+            obj.ap_instructions( in_act &  in_prev) =  0;
+            obj.ap_instructions( in_act & ~in_prev) = +1;
+            obj.ap_instructions(~in_act &  in_prev) = -1;
+
+            % Se vuoi mantenere allineamento perfetto con "tasks"
+            obj.ap_instructions = obj.ap_instructions(tf_all);
+
+            disp(act_tags)
+            disp(prev_tags)
+            disp(all_tags)
+            disp(obj.ap_instructions)
+
+
+
         end
-
-        if ~found
-            error('Action not found');
-        end
-
-        % act_tags  = obj.actions_tag{obj.current_action};
-        % prev_tags = obj.actions_tag{obj.previous_action};
-
-        % all_tags = unique([prev_tags, act_tags], 'stable');
-
-        % [tf, idx] = ismember(all_tags, obj.all_task_names);
-        % obj.tasks = obj.all_task_list(idx(tf));
-
-        act_tags  = obj.actions_tag{obj.current_action};
-        prev_tags = obj.actions_tag{obj.previous_action};
-
-        % Unione stabile dei tag
-        all_tags = unique([prev_tags, act_tags], 'stable');
-
-        % Mappa tag → task object
-        [tf_all, idx_all] = ismember(all_tags, obj.all_task_names);
-        obj.tasks = obj.all_task_list(idx_all(tf_all));
-
-        % Membership
-        in_act  = ismember(all_tags, act_tags);
-        in_prev = ismember(all_tags, prev_tags);
-
-        % Preallocazione
-        obj.ap_instructions = zeros(1, numel(all_tags));
-
-        % Regole
-        obj.ap_instructions( in_act &  in_prev) =  0;
-        obj.ap_instructions( in_act & ~in_prev) = +1;
-        obj.ap_instructions(~in_act &  in_prev) = -1;
-
-        % Se vuoi mantenere allineamento perfetto con "tasks"
-        obj.ap_instructions = obj.ap_instructions(tf_all);
-        
-        disp(act_tags)
-        disp(prev_tags)
-        disp(all_tags)
-        disp(obj.ap_instructions)
-
-
-
-    end
 
     end
 end
