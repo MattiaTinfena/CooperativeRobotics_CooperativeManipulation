@@ -37,9 +37,9 @@ arm1.setGoal(w_obj_pos, w_obj_ori, w_obj_pos - [obj_length/2; 0; 0],arm1.wTt(1:3
 arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3, 1:3) * rotation(0, deg2rad(30), 0));
 
 %Define Object goal frame (Cooperative Motion)
-wTog=[rotation(0,0,0) [0.65, -0.35, 0.28]'; 0 0 0 1];
-arm1.set_obj_goal(wTog)
-arm2.set_obj_goal(wTog)
+wTog=[arm1.wTt(1:3, 1:3) * rotation(0.0, deg2rad(30), 0.0) [0.65, -0.35, 0.28]'; 0 0 0 1]; % aggiungo la rotazione di 30 gradi perché poi l'errore lo calcolo in generale
+arm1.set_obj_goal(wTog);
+arm2.set_obj_goal(wTog);
 
 %Define Tasks, input values(Robot type(L,R,BM), Task Name)
 left_tool_task=tool_task("L","LT",false);

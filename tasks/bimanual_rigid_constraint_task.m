@@ -17,7 +17,13 @@ classdef bimanual_rigid_constraint_task < Task
 
         function updateJacobian(obj,robot_system)
 
-            obj.J = [robot_system.left_arm.wJt, -robot_system.right_arm.wJt];
+            r_toc_left = robot_system.left_arm.wTo(1:3, 4) - robot_system.left_arm.wTg(1:3,4);
+            wS_toc_left = [eye(3) zeros(3); skew(-r_toc_left) eye(3)];
+
+            r_toc_right = robot_system.right_arm.wTo(1:3, 4) - robot_system.right_arm.wTg(1:3,4);
+            wS_toc_right = [eye(3) zeros(3); skew(-r_toc_right) eye(3)];
+
+            obj.J = [wS_toc_left * robot_system.left_arm.wJt, -wS_toc_right * robot_system.right_arm.wJt];
         end
 
         function updateActivation(obj, robot_system)
