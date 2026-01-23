@@ -27,7 +27,7 @@ arm2=panda_arm(model,wTb2);
 bm_sim=bimanual_sim(dt,arm1,arm2,end_time);
 
 %Define Object Shape and origin Frame
-obj_length = 0.12;
+obj_length = 0.10;
 w_obj_pos = [0.5 0 0.59]';
 w_obj_ori = rotation(0,0,0);
 
@@ -37,7 +37,8 @@ arm1.setGoal(w_obj_pos, w_obj_ori, w_obj_pos - [obj_length/2; 0; 0],arm1.wTt(1:3
 arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3, 1:3) * rotation(0, deg2rad(30), 0));
 
 %Define Object goal frame (Cooperative Motion)
-wTog=[arm1.wTt(1:3, 1:3) * rotation(0.0, deg2rad(30), 0.0) [0.65, -0.35, 0.28]'; 0 0 0 1]; % aggiungo la rotazione di 30 gradi perché poi l'errore lo calcolo in generale
+% wTog=[arm1.wTt(1:3, 1:3) * rotation(0.0, deg2rad(30), 0.0) [0.65, -0.35, 0.28]'; 0 0 0 1]; % aggiungo la rotazione di 30 gradi perché poi l'errore lo calcolo in generale
+wTog=[rotation(0.0, 0.0, 0.0) [0.65, -0.35, 0.28]'; 0 0 0 1];
 arm1.set_obj_goal(wTog);
 arm2.set_obj_goal(wTog);
 
@@ -48,24 +49,26 @@ left_minimun_altitude_task=minimum_altitude_task("L","LMA",false);
 right_minimun_altitude_task=minimum_altitude_task("R","RMA",false);
 left_joint_limit_task=joint_limit_task("L","LJL",false);
 right_joint_limit_task=joint_limit_task("R","RJL",false);
-left_bimanual_rigid_constraint_task = bimanual_rigid_constraint_task("L","LBRC",true);
-right_bimanual_rigid_constraint_task = bimanual_rigid_constraint_task("R","RBRC",true);
+bim_rigid_constraint_task = bimanual_rigid_constraint_task("R","BRC",true);
 left_move_object_task = move_object_task("L", "LMO", false);
 right_move_object_task = move_object_task("R", "RMO", false);
+stp_joints_task = stop_joints_task("R","SJ",false);
 
-task_list = {left_tool_task, right_tool_task, left_minimun_altitude_task, right_minimun_altitude_task, left_joint_limit_task, right_joint_limit_task, left_bimanual_rigid_constraint_task, right_bimanual_rigid_constraint_task, left_move_object_task, right_move_object_task};
-task_list_name = ["LTT", "RTT", "LMAT", "RMAT", "LJLT", "RJLT", "LBRC", "RBRC", "LMO", "RMO"];
+task_list = {left_tool_task, right_tool_task, left_minimun_altitude_task, right_minimun_altitude_task, left_joint_limit_task, right_joint_limit_task, bim_rigid_constraint_task, left_move_object_task, right_move_object_task, stp_joints_task};
+task_list_name = ["LTT", "RTT", "LMAT", "RMAT", "LJLT", "RJLT", "BRCT", "LMOT", "RMOT", "SJT"];
 
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
-go_to = ["LJLT", "RJLT", "LMAT", "RMAT", "LTT", "RTT"];
-move_obj = ["LJLT", "RJLT", "LMAT", "RMAT", "LBRC", "RBRC", "LMO", "RMO"];
+move_to = ["LJLT", "RJLT", "LMAT", "RMAT", "LTT", "RTT"];
+move_obj = ["LJLT", "RJLT", "LMAT", "RMAT", "BRCT" "LMOT", "RMOT"];
+stop = ["LMAT", "RMAT", "SJT"];
 %Load Action Manager Class and load actions
 actionManager = ActionManager();
 actionManager.setTaskList(task_list, task_list_name);
-actionManager.addAction(go_to, "GT");
+actionManager.addAction(move_to, "MT");
 actionManager.addAction(move_obj, "MO");
-actionManager.setCurrentAction("GT", bm_sim.time);
+actionManager.addAction(stop, "ST");
+actionManager.setCurrentAction("MT", bm_sim.time);
 
 %Initiliaze robot interface
 robot_udp=UDP_interface(real_robot);
@@ -95,8 +98,19 @@ for t = 0:dt:end_time
 
     [v_ang, v_lin] = CartError(bm_sim.left_arm.wTg , bm_sim.left_arm.wTt);
 
-    if norm(v_lin) < 0.1 && actionManager.current_action == 1 && norm(v_ang) < 0.1 %valuta se mettere la norma solo di x e y (nel caso in cui z non sia raggiungibile)
+    if norm(v_lin) < 0.1 && actionManager.current_action == 1 && norm(v_ang) < 0.1
         actionManager.setCurrentAction("MO",  bm_sim.time);
+    end
+
+    r_toc = bm_sim.left_arm.wTo(1:3, 4) - bm_sim.left_arm.wTg(1:3,4); % <w>
+    tToc = [eye(3), bm_sim.left_arm.wTt(1:3, 1:3)' * r_toc; 0 0 0 1];
+    wToc = bm_sim.left_arm.wTt * tToc;
+    wTog = [bm_sim.left_arm.wTt(1:3, 1:3) * bm_sim.left_arm.wTog(1:3, 1:3), bm_sim.left_arm.wTog(1:3, 4); 0 0 0 1];
+
+    [v_ang2, v_lin2] = CartError(wTog ,wToc);
+
+    if norm(v_lin2) < 0.1 && actionManager.current_action == 2 && norm(v_ang2) < 0.1
+        actionManager.setCurrentAction("ST",  bm_sim.time);
     end
     % 6. Lggging
     % logger.update(bm_sim.time,bm_sim.loopCounter)

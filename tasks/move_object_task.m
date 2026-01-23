@@ -19,13 +19,12 @@ classdef move_object_task < Task
 
 
             r_toc = robot.wTo(1:3, 4) - robot.wTg(1:3,4); % <w>
-            tToc = [eye(3), [robot.wTt(1:3, 1:3)' * r_toc]; 0 0 0 1];
+            tToc = [eye(3), robot.wTt(1:3, 1:3)' * r_toc; 0 0 0 1];
             wToc = robot.wTt * tToc;
-
-            %wTog = [robot.wTt(1:3, 1:3) * robot.wTog(1:3, 1:3), robot.wTog(1:3, 4); 0 0 0 1];
+            wTog = [robot.wTt(1:3, 1:3) * robot.wTog(1:3, 1:3), robot.wTog(1:3, 4); 0 0 0 1];
             % Qui noi moltiplicando robot.wTog per robot.wTt e facendo poi il CartesianError tra NON robot.wTog ma con la wTog che ci calcolavamo noi, bypassavamo la rotazione di 30 gradi, e quindi dargli quell' ulteriore rotazione era sbagliato
 
-            [v_ang, v_lin] = CartError(robot.wTog ,wToc);
+            [v_ang, v_lin] = CartError(wTog ,wToc);
             robot.dist_to_goal=v_lin;
             robot.rot_to_goal=v_ang;
 

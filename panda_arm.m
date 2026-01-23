@@ -36,11 +36,11 @@ classdef panda_arm < handle
             % Constructor
             obj.robot_model = model;
             obj.wTb = wTb;
-            
+
             %Initialize Default State
             obj.q=[0.0167305,-0.762614,-0.0207622,-2.34352,-0.0305686,1.53975,0.753872]';
             obj.qdot=[0 0 0 0 0 0 0]';
-            
+
             %Get current transformation from world frame to end effector
             %Frame
             obj.bTe=getTransform(obj.robot_model.franka,[obj.q',0,0],'panda_link7');
@@ -51,26 +51,26 @@ classdef panda_arm < handle
             obj.jlmax=[2.8973; 1.7628; 2.8973;-0.0698; 2.8973; 3.7525; 2.8973];
 
             % FIXED END EFFECTOR
-            theta = -44.9949;% FIXED ANGLE BETWEEN EE AND TOOL 
-            tool_length = 0.2104;% FIXED DISTANCE BETWEEN EE AND TOOL
+            theta = -44.9949;% FIXED ANGLE BETWEEN EE AND TOOL
+            tool_length = 0.2124;% FIXED DISTANCE BETWEEN EE AND TOOL
 
             % Define trasnformation matrix from ee to tool, and
             % transformation from world frame to tool
             thetaRad = deg2rad(theta);
             obj.eTt = [cos(thetaRad) -sin(thetaRad) 0 0;
-                        sin(thetaRad) cos(thetaRad) 0 0;
-                        0 0 1 tool_length
-                        0 0 0 1];
+                sin(thetaRad) cos(thetaRad) 0 0;
+                0 0 1 tool_length
+                0 0 0 1];
             obj.wTt = obj.wTe * obj.eTt;
-          
+
         end
 
         function setGoal(obj,obj_position,obj_orientation,arm_dist_offset,arm_rot_offset)
-            % Set goal positions and orientations for arm 
+            % Set goal positions and orientations for arm
             obj.wTo=[[obj_orientation obj_position]; 0 0 0 1];
             obj.wTg=[[arm_rot_offset arm_dist_offset]; 0 0 0 1];
         end
-        
+
         function set_obj_goal(obj,wTog)
             % Set goal positions and orientations for the object
             obj.wTog = wTog;
@@ -83,7 +83,7 @@ classdef panda_arm < handle
             obj.bTe=getTransform(obj.robot_model.franka,[obj.q',0,0],'panda_link7');
             obj.wTe=obj.wTb*obj.bTe;
             obj.wTt =obj.wTe*obj.eTt;
-            
+
         end
         function update_jacobian(obj)
             % Compute Differential kinematics from the base frame to the
