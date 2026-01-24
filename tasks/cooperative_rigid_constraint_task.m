@@ -2,7 +2,7 @@ classdef cooperative_rigid_constraint_task < Task
     properties
         xt_dot_coop;
         C;
-        Hlr;
+        Hrl;
     end
 
     methods
@@ -14,11 +14,12 @@ classdef cooperative_rigid_constraint_task < Task
 
         function updateReference(obj, robot_system)
 
-            xt_dot_feas = obj.Hlr * (eye(12)-(pinv(obj.C) * obj.C)) * [obj.xt_dot_coop; obj.xt_dot_coop];
+            xt_dot_feas = obj.Hrl * (eye(12)-(pinv(obj.C) * obj.C)) * [obj.xt_dot_coop; obj.xt_dot_coop];
             obj.xdotbar = xt_dot_feas(1:6);
         end
 
         function updateJacobian(obj,robot_system)
+
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
@@ -26,7 +27,6 @@ classdef cooperative_rigid_constraint_task < Task
             end
 
             obj.J = robot.wJt;
-
         end
 
         function updateActivation(obj, robot_system)

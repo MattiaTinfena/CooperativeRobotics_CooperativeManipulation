@@ -18,20 +18,12 @@ classdef ActionManager < handle
     methods
 
         function addAction(obj, taskStack, name)
-            % taskStack: cell array di nomi task (string/char)
 
             obj.actions_tag{end+1} = taskStack;
-
-            % Trova per ogni elemento di taskStack l'indice in obj.all_task_names
             [tf, idx] = ismember(taskStack, obj.all_task_names);
-
-            % Se vuoi ignorare quelli non trovati:
             idx = idx(tf);
-
-            % Costruisci direttamente l'azione (cell array di task)
             actionTasks = obj.all_task_list(idx);
 
-            % Salva
             obj.actions{end+1} = actionTasks;
             obj.actions_names{end+1} = name;
 
@@ -43,7 +35,7 @@ classdef ActionManager < handle
             obj.all_task_names = task_names;
         end
 
-        function [ydotbar] = computeICAT(obj, robot, time)
+        function [ydotbar] = computeICAT(obj, robot, time, additional_task)
             % Get current action
 
             ap = {};
@@ -73,11 +65,7 @@ classdef ActionManager < handle
 
                 % when gaussian transitory is ended
                 if (time > obj.initial_time + 2)
-                    % disp("Transition ended")
-                    % disp("initial_time:");
-                    % disp(obj.initial_time);
-                    % disp("time:");
-                    % disp(time);
+
                     obj.tasks = obj.actions{obj.current_action};
                     disp(obj.tasks);
                     obj.action_changes = 0;
@@ -88,22 +76,42 @@ classdef ActionManager < handle
                 end
             end
 
+            tasks_to_run = {};
+            ap_to_run = {};
+
+            if (nargin == 4)
+
+                coop_task_id = strcmp(obj.all_task_names, additional_task);
+
+                if any(coop_task_id)
+
+                    coop_task = obj.all_task_list{coop_task_id};
+                    tasks_to_run = [{coop_task}, obj.tasks];
+                    ap_to_run    = [{1}, ap];
+                else
+                    error("Not existing task");
+                end
+
+            else
+                tasks_to_run = obj.tasks;
+                ap_to_run    = ap;
+            end
+
             % 1. Update references, Jacobians, activations
-            for i = 1:length(obj.tasks)
-                obj.tasks{i}.updateReference(robot);
-                obj.tasks{i}.updateJacobian(robot);
-                obj.tasks{i}.updateActivation(robot);
+            for i = 1:length(tasks_to_run)
+                tasks_to_run{i}.updateReference(robot);
+                tasks_to_run{i}.updateJacobian(robot);
+                tasks_to_run{i}.updateActivation(robot);
             end
 
             % 2. Perform ICAT (task-priority inverse kinematics)
             ydotbar = zeros(7,1);
             Qp = eye(7);
-            for i = 1:length(obj.tasks)
-                [Qp, ydotbar] = iCAT_task(obj.tasks{i}.A * ap{i}, obj.tasks{i}.J, ...
-                    Qp, ydotbar, obj.tasks{i}.xdotbar, ...
+            for i = 1:length(tasks_to_run)
+                [Qp, ydotbar] = iCAT_task(tasks_to_run{i}.A * ap_to_run{i}, tasks_to_run{i}.J, ...
+                    Qp, ydotbar, tasks_to_run{i}.xdotbar, ...
                     1e-4, 0.01, 10);
             end
-
             % 3. Last task: residual damping
             [~, ydotbar] = iCAT_task(eye(7), eye(7), Qp, ydotbar, zeros(7,1), 1e-4, 0.01, 10);
         end
@@ -119,7 +127,7 @@ classdef ActionManager < handle
                     obj.action_changes = 1;
                     obj.initial_time = time;
                     found = true;
-                    break; % esci dal ciclo
+                    break;
                 end
             end
 
@@ -130,26 +138,20 @@ classdef ActionManager < handle
             act_tags  = obj.actions_tag{obj.current_action};
             prev_tags = obj.actions_tag{obj.previous_action};
 
-            % Unione stabile dei tag
             all_tags = unique([prev_tags, act_tags], 'stable');
 
-            % Mappa tag → task object
             [tf_all, idx_all] = ismember(all_tags, obj.all_task_names);
             obj.tasks = obj.all_task_list(idx_all(tf_all));
 
-            % Membership
             in_act  = ismember(all_tags, act_tags);
             in_prev = ismember(all_tags, prev_tags);
 
-            % Preallocazione
             obj.ap_instructions = zeros(1, numel(all_tags));
 
-            % Regole
             obj.ap_instructions( in_act &  in_prev) =  0;
             obj.ap_instructions( in_act & ~in_prev) = +1;
             obj.ap_instructions(~in_act &  in_prev) = -1;
 
-            % Se vuoi mantenere allineamento perfetto con "tasks"
             obj.ap_instructions = obj.ap_instructions(tf_all);
 
             disp(act_tags)

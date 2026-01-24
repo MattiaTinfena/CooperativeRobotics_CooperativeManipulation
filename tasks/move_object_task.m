@@ -22,6 +22,7 @@ classdef move_object_task < Task
             tToc = [eye(3), robot.wTt(1:3, 1:3)' * r_toc; 0 0 0 1];
             wToc = robot.wTt * tToc;
             wTog = [robot.wTt(1:3, 1:3) * robot.wTog(1:3, 1:3), robot.wTog(1:3, 4); 0 0 0 1];
+            % Qui noi moltiplicando robot.wTog per robot.wTt e facendo poi il CartesianError tra NON robot.wTog ma con la wTog che ci calcolavamo noi, bypassavamo la rotazione di 30 gradi, e quindi dargli quell' ulteriore rotazione era sbagliato
 
             [v_ang, v_lin] = CartError(wTog ,wToc);
             robot.dist_to_goal=v_lin;
@@ -31,6 +32,7 @@ classdef move_object_task < Task
             % limit the requested velocities...
             obj.xdotbar(1:3) = Saturate(obj.xdotbar(1:3), 0.3);
             obj.xdotbar(4:6) = Saturate(obj.xdotbar(4:6), 0.3);
+
         end
 
         function updateJacobian(obj,robot_system)
@@ -41,7 +43,7 @@ classdef move_object_task < Task
             end
             tool_jacobian=robot.wJt;
 
-            r_toc = robot.wTo(1:3, 4) - robot.wTg(1:3,4);
+            r_toc = robot.wTo(1:3, 4) - robot.wTg(1:3,4); % <w>
             wS_toc = [eye(3) zeros(3); skew(-robot.wTt(1:3, 1:3)' * r_toc) eye(3)];
 
             obj.J = wS_toc * tool_jacobian;

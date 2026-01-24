@@ -7,7 +7,7 @@ addpath('./tasks')
 clc;clear;close all;
 %Simulation Parameters
 dt = 0.005;
-end_time = 30;
+end_time = 25;
 
 % Initialize Franka Emika Panda Model
 model = load("panda.mat");
@@ -32,13 +32,11 @@ w_obj_pos = [0.5 0 0.59]';
 w_obj_ori = rotation(0,0,0);
 
 %Set goal frames for left and right arm, based on object frame
-%TODO: Set arm goal frame based on object frame.
 arm1.setGoal(w_obj_pos, w_obj_ori, w_obj_pos - [obj_length/2; 0; 0],arm1.wTt(1:3, 1:3) * rotation(0, deg2rad(20), 0));
 arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3, 1:3) * rotation(0, deg2rad(20), 0));
 
 %Define Object goal frame (Cooperative Motion)
-% wTog=[arm1.wTt(1:3, 1:3) * rotation(0.0, deg2rad(30), 0.0) [0.65, -0.35, 0.28]'; 0 0 0 1]; % aggiungo la rotazione di 30 gradi perché poi l'errore lo calcolo in generale
-wTog=[rotation(0.0, 0.0, 0.0) [0.6, 0.40, 0.48]'; 0 0 0 1];
+wTog=[rotation(0.0, 0.0, 0.0) [0, 0, 0]'; 0 0 0 1];
 arm1.set_obj_goal(wTog);
 arm2.set_obj_goal(wTog);
 
@@ -60,18 +58,16 @@ left_task_list = {left_tool_task, left_minimun_altitude_task, left_joint_limit_t
 left_task_list_name = ["LTT", "LMAT", "LJLT", "LCRCT", "LMOT", "LSJT"];
 
 right_task_list = {right_tool_task, right_minimun_altitude_task, right_joint_limit_task, right_cooperative_rigid_constraint_task, right_move_object_task, right_stp_joints_task};
-right_task_list_name = ["RTT", "RMAT", "RJLT", "RCRCT", "RMOT", "RSJT"];;
-
+right_task_list_name = ["RTT", "RMAT", "RJLT", "RCRCT", "RMOT", "RSJT"];
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
-% TODO: add cooperation task
 left_move_to = ["LJLT", "LMAT", "LTT"];
-left_move_obj = ["LCRCT", "LJLT", "LMAT", "LMOT"];
-left_stop = ["LMAT", "SJT"];
+left_move_obj = ["LJLT", "LMAT", "LMOT"];
+left_stop = ["LMAT", "LSJT"];
 
 right_move_to = ["RJLT", "RMAT", "RTT"];
-right_move_obj = ["RCRCT", "RJLT", "RMAT", "RMOT"];
-right_stop = ["RMAT", "SJT"];
+right_move_obj = ["RJLT", "RMAT", "RMOT"];
+right_stop = ["RMAT", "RSJT"];
 
 %Load Action Manager Class and load actions
 leftActionManager = ActionManager();
@@ -95,7 +91,7 @@ rightActionManager.setCurrentAction("RMT", coop_sim.time);
 robot_udp=UDP_interface(real_robot);
 
 %Initialize logger
-% logger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,actionManager);
+logger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,leftActionManager);
 
 %Main simulation Loop
 for t = 0:dt:end_time
@@ -109,9 +105,50 @@ for t = 0:dt:end_time
     coop_sim.update_full_kinematics();
 
     % 3. Compute control commands for current action
-    % TODO: check if it's coop_sim.time or dt
     [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time);
     [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time);
+
+    if(leftActionManager.current_action == 2 && rightActionManager.current_action == 2)
+        % Implementation of the Coordination Policy
+        l_xt_dot_non_coop = coop_sim.left_arm.wJt * q_dot_l;
+        r_xt_dot_non_coop = coop_sim.right_arm.wJt * q_dot_r;
+
+        l_wToc = coop_sim.left_arm.wTt * coop_sim.left_arm.tTo;
+        r_wToc = coop_sim.right_arm.wTt * coop_sim.right_arm.tTo;
+
+        [l_v_ang, l_v_lin] = CartError(coop_sim.left_arm.wTog, l_wToc);
+        [r_v_ang, r_v_lin] = CartError(coop_sim.right_arm.wTog, r_wToc);
+
+        l_x_dot_des = 0.7 * [l_v_ang; l_v_lin];
+        r_x_dot_des = 0.7 * [r_v_ang; r_v_lin];
+
+        mu0 = 1e-4;
+        mu_l = mu0 + norm(l_x_dot_des - l_xt_dot_non_coop);
+        mu_r = mu0 + norm(r_x_dot_des - r_xt_dot_non_coop);
+
+        Hl = coop_sim.left_arm.wJt * pinv(coop_sim.left_arm.wJt);
+        Hr = coop_sim.right_arm.wJt * pinv(coop_sim.right_arm.wJt);
+
+        xt_dot_coop = (1/(mu_l + mu_r)) * ((mu_l * l_xt_dot_non_coop) + (mu_r * r_xt_dot_non_coop));
+
+        C = [Hl, -Hr];
+        Hrl = [Hl, zeros(6); zeros(6), Hr];
+
+        % Simulation of the communication to the 2 robots
+        left_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
+        left_cooperative_rigid_constraint_task.C = C;
+        left_cooperative_rigid_constraint_task.Hrl = Hrl;
+
+        right_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
+        right_cooperative_rigid_constraint_task.C = C;
+        right_cooperative_rigid_constraint_task.Hrl = Hrl;
+
+        % Compute control commands for current action
+
+        [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time, "LCRCT");
+        [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time, "RCRCT");
+
+    end
 
     % 4. Step the simulator (integrate velocities)
     coop_sim.sim(q_dot_l, q_dot_r);
@@ -119,58 +156,38 @@ for t = 0:dt:end_time
     % 5. Send updated state to Pybullet
     robot_udp.send(t,coop_sim)
 
-    % Implementation of the Coordination Policy
 
-    l_xt_dot_non_coop = coop_sim.left_arm.wJt * q_dot_l;
-    r_xt_dot_non_coop = coop_sim.right_arm.wJt * q_dot_r;
+    % TODO: fix this check to change action
+    [v_ang, v_lin] = CartError(coop_sim.left_arm.wTg , coop_sim.left_arm.wTt);
 
-    l_tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
-    r_tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
+    if norm(v_lin) < 0.01 && leftActionManager.current_action == 1 && norm(v_ang) < 0.01
+        leftActionManager.setCurrentAction("LMO",  coop_sim.time);
+        rightActionManager.setCurrentAction("RMO",  coop_sim.time);
 
-    l_wToc = coop_sim.left_arm.wTt * l_tTo;
-    r_wToc = coop_sim.right_arm.wTt * r_tTo;
+        coop_sim.left_arm.tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
+        coop_sim.right_arm.tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
+    end
 
-    [l_v_ang, l_v_lin] = CartError(coop_sim.left_arm.wTog, l_wToc);
-    [r_v_ang, r_v_lin] = CartError(coop_sim.right_arm.wTog, r_wToc);
+    r_toc = coop_sim.left_arm.wTo(1:3, 4) - coop_sim.left_arm.wTg(1:3,4); % <w>
+    tToc = [eye(3), coop_sim.left_arm.wTt(1:3, 1:3)' * r_toc; 0 0 0 1];
+    wToc = coop_sim.left_arm.wTt * tToc;
+    wTog = [coop_sim.left_arm.wTt(1:3, 1:3) * coop_sim.left_arm.wTog(1:3, 1:3), coop_sim.left_arm.wTog(1:3, 4); 0 0 0 1];
 
-    l_x_dot_des = 0.7 * [l_v_ang, l_v_lin];
-    r_x_dot_des = 0.7 * [r_v_ang, r_v_lin];
+    [v_ang2, v_lin2] = CartError(wTog ,wToc);
 
-    mu0 = 1e-4;
-    mu_l = mu0 + norm(l_x_dot_des - l_xt_dot_non_coop);
-    mu_r = mu0 + norm(r_x_dot_des - r_xt_dot_non_coop);
-
-    Hl = coop_sim.left_arm.wJt * pinv(coop_sim.left_arm.wJt);
-    Hr = coop_sim.right_arm.wJt * pinv(coop_sim.right_arm.wJt);
-
-    xt_dot_coop = (1/(mu_l + mu_r)) * ((mu_l * l_xt_dot_non_coop) + (mu_r * r_xt_dot_non_coop));
-
-    C = [Hl, -Hr];
-    Hrl = [Hl, zeros(6); zeros(6), Hr];
-
-    % Simulation of the communication to the 2 robots
-    left_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
-    left_cooperative_rigid_constraint_task.C = C;
-    left_cooperative_rigid_constraint_task.Hrl = Hrl;
-
-    right_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
-    right_cooperative_rigid_constraint_task.C = C;
-    right_cooperative_rigid_constraint_task.Hrl = Hrl;
-
-    % Compute control commands for current action
-    % TODO: check if it's coop_sim.time or dt
-    [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time);
-    [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time);
+    if norm(v_lin2) < 0.01 && leftActionManager.current_action == 2 && norm(v_ang2) < 0.01
+        leftActionManager.setCurrentAction("LST",  coop_sim.time);
+        rightActionManager.setCurrentAction("RST",  coop_sim.time);
+    end
 
     % 6. Logging
-    % logger.update(coop_sim.time,coop_sim.loopCounter)
+    logger.update(coop_sim.time,coop_sim.loopCounter)
     coop_sim.time;
     % 7. Optional real-time slowdown
     SlowdownToRealtime(dt);
-
-    % Display joint position and velocity, Display for a given action, a number
-    % of tasks
-    action=1;
-    tasks=[1];
-    % logger.plotAll(action,tasks);
 end
+% Display joint position and velocity, Display for a given action, a number
+% of tasks
+action=1;
+tasks=[1];
+logger.plotAll(action,tasks);
