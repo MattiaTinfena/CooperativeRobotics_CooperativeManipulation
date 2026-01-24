@@ -96,8 +96,8 @@ classdef ActionManager < handle
             end
 
             % 2. Perform ICAT (task-priority inverse kinematics)
-            ydotbar = zeros(14,1);
-            Qp = eye(14);
+            ydotbar = zeros(7,1);
+            Qp = eye(7);
             for i = 1:length(obj.tasks)
                 [Qp, ydotbar] = iCAT_task(obj.tasks{i}.A * ap{i}, obj.tasks{i}.J, ...
                     Qp, ydotbar, obj.tasks{i}.xdotbar, ...
@@ -105,7 +105,7 @@ classdef ActionManager < handle
             end
 
             % 3. Last task: residual damping
-            [~, ydotbar] = iCAT_task(eye(14), eye(14), Qp, ydotbar, zeros(14,1), 1e-4, 0.01, 10);
+            [~, ydotbar] = iCAT_task(eye(7), eye(7), Qp, ydotbar, zeros(7,1), 1e-4, 0.01, 10);
         end
 
         function setCurrentAction(obj, actionName, time)

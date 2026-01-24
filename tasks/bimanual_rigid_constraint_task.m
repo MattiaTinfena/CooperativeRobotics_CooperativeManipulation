@@ -3,6 +3,8 @@ classdef bimanual_rigid_constraint_task < Task
 
     end
 
+    % TODO: MUST BE MODIFIED TO BE A COOPERATIVE AND NOT A BIMANUAL
+
     methods
         function obj=bimanual_rigid_constraint_task(robot_ID,taskID, smooth)
             obj.ID=robot_ID;

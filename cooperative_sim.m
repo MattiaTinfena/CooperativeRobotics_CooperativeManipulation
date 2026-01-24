@@ -1,4 +1,4 @@
-classdef bimanual_sim < handle
+classdef cooperative_sim < handle
     %Bimanual Simulator for two Franka Emika Manipulators
     % - Integrates velocities to update the robot state
     % - Updates transforms via the robot model
@@ -13,7 +13,7 @@ classdef bimanual_sim < handle
     end
 
     methods
-        function obj = bimanual_sim(dt,arm_model1,arm_model2,endTime)
+        function obj = cooperative_sim(dt,arm_model1,arm_model2,endTime)
             obj.dt = dt;
             obj.left_arm = arm_model1;
             obj.right_arm = arm_model2;
@@ -22,13 +22,13 @@ classdef bimanual_sim < handle
             obj.maxSteps = ceil(endTime/dt);
         end
 
-        function sim(obj,qdot)
+        function sim(obj,qdotl, qdotr)
             % update the state in the robot object
-            obj.left_arm.qdot = qdot(1:7);
-            obj.right_arm.qdot = qdot(8:14);
+            obj.left_arm.qdot = qdotl;
+            obj.right_arm.qdot = qdotr;
 
             % Integrate manipulator joints
-            obj.left_arm.q = obj.left_arm.q + obj.left_arm.qdot*obj.dt;    
+            obj.left_arm.q = obj.left_arm.q + obj.left_arm.qdot*obj.dt;
             obj.right_arm.q = obj.right_arm.q + obj.right_arm.qdot*obj.dt;
 
             % increment time and loop counter

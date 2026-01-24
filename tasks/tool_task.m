@@ -11,32 +11,31 @@ classdef tool_task < Task
             obj.smooth=smooth;
         end
         function updateReference(obj, robot_system)
+
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
                 robot=robot_system.right_arm;
             end
+
             [v_ang, v_lin] = CartError(robot.wTg , robot.wTt);
+
             robot.dist_to_goal=v_lin;
             robot.rot_to_goal=v_ang;
+
             obj.xdotbar = 1.0 * [v_ang; v_lin];
-            % limit the requested velocities...
             obj.xdotbar(1:3) = Saturate(obj.xdotbar(1:3), 0.3);
             obj.xdotbar(4:6) = Saturate(obj.xdotbar(4:6), 0.3);
         end
+
         function updateJacobian(obj,robot_system)
+
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
             elseif(obj.ID=='R')
                 robot=robot_system.right_arm;
             end
-            tool_jacobian=robot.wJt;
-
-            if obj.ID=='L'
-                obj.J=[tool_jacobian, zeros(6, 7)];
-            elseif obj.ID=='R'
-                obj.J=[zeros(6, 7), tool_jacobian];
-            end
+            obj.J = robot.wJt;
         end
 
         function updateActivation(obj, robot_system)

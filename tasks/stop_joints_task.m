@@ -17,7 +17,7 @@ classdef stop_joints_task < Task
 
         function updateJacobian(obj,robot_system)
 
-            obj.J = zeros(6,14);
+            obj.J = zeros(6, 7);
         end
 
         function updateActivation(obj, robot_system)

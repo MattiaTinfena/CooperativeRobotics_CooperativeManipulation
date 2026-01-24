@@ -24,9 +24,9 @@ classdef minimum_altitude_task < Task
             else
                 obj.xdotbar = 0;
             end
-            % limit the requested velocities...
             obj.xdotbar = Saturate(obj.xdotbar, 0.2);
         end
+
         function updateJacobian(obj,robot_system)
             if(obj.ID=='L')
                 robot=robot_system.left_arm;
@@ -36,11 +36,7 @@ classdef minimum_altitude_task < Task
             tool_jacobian=robot.wJt;
 
             n = [0 0 0 0 0 1];
-            if obj.ID=='L'
-                obj.J = n * [tool_jacobian, zeros(6, 7)];
-            elseif obj.ID=='R'
-                obj.J = n * [zeros(6, 7), tool_jacobian];
-            end
+            obj.J = n * tool_jacobian;
 
         end
 
