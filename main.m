@@ -36,7 +36,7 @@ arm1.setGoal(w_obj_pos, w_obj_ori, w_obj_pos - [obj_length/2; 0; 0],arm1.wTt(1:3
 arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3, 1:3) * rotation(0, deg2rad(20), 0));
 
 %Define Object goal frame (Cooperative Motion)
-wTog=[rotation(0.0, 0.0, 0.0) [0, 0, 0]'; 0 0 0 1];
+wTog=[rotation(0.0, 0.0, 0.0) [0.6, 0.4, 0.48]'; 0 0 0 1];
 arm1.set_obj_goal(wTog);
 arm2.set_obj_goal(wTog);
 
@@ -87,6 +87,8 @@ rightActionManager.addAction(right_stop, "RST");
 leftActionManager.setCurrentAction("LMT", coop_sim.time);
 rightActionManager.setCurrentAction("RMT", coop_sim.time);
 
+initial_time = coop_sim.time;
+
 %Initiliaze robot interface
 robot_udp=UDP_interface(real_robot);
 
@@ -95,12 +97,14 @@ logger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,leftActionManager);
 
 %Main simulation Loop
 for t = 0:dt:end_time
+
     % 1. Receive UDP packets - DO NOT EDIT
     [ql,qr]=robot_udp.udp_receive(t);
     if real_robot==true %Only in real setup, assign current robot configuration as initial configuratio
         coop_sim.left_arm.q=ql;
         coop_sim.right_arm.q=qr;
     end
+
     % 2. Update Full kinematics of the bimanual system
     coop_sim.update_full_kinematics();
 
@@ -144,50 +148,45 @@ for t = 0:dt:end_time
         right_cooperative_rigid_constraint_task.Hrl = Hrl;
 
         % Compute control commands for current action
-
         [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time, "LCRCT");
         [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time, "RCRCT");
 
     end
 
-    % 4. Step the simulator (integrate velocities)
-    coop_sim.sim(q_dot_l, q_dot_r);
+    % 4. Action switching
+    goal_reached = norm(coop_sim.left_arm.rot_to_goal) < 0.01 && norm(coop_sim.left_arm.dist_to_goal) < 0.01 && ...
+        norm(coop_sim.right_arm.rot_to_goal) < 0.01 && norm(coop_sim.right_arm.dist_to_goal) < 0.01;
 
-    % 5. Send updated state to Pybullet
-    robot_udp.send(t,coop_sim)
+    delta_time = coop_sim.time - initial_time;
 
+    if leftActionManager.current_action == 1 && rightActionManager.current_action == 1 && goal_reached
 
-    % TODO: fix this check to change action
-    [v_ang, v_lin] = CartError(coop_sim.left_arm.wTg , coop_sim.left_arm.wTt);
-
-    if norm(v_lin) < 0.01 && leftActionManager.current_action == 1 && norm(v_ang) < 0.01
         leftActionManager.setCurrentAction("LMO",  coop_sim.time);
         rightActionManager.setCurrentAction("RMO",  coop_sim.time);
 
         coop_sim.left_arm.tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
         coop_sim.right_arm.tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
-    end
 
-    r_toc = coop_sim.left_arm.wTo(1:3, 4) - coop_sim.left_arm.wTg(1:3,4); % <w>
-    tToc = [eye(3), coop_sim.left_arm.wTt(1:3, 1:3)' * r_toc; 0 0 0 1];
-    wToc = coop_sim.left_arm.wTt * tToc;
-    wTog = [coop_sim.left_arm.wTt(1:3, 1:3) * coop_sim.left_arm.wTog(1:3, 1:3), coop_sim.left_arm.wTog(1:3, 4); 0 0 0 1];
+        initial_time = coop_sim.time;
 
-    [v_ang2, v_lin2] = CartError(wTog ,wToc);
-
-    if norm(v_lin2) < 0.01 && leftActionManager.current_action == 2 && norm(v_ang2) < 0.01
+    elseif (leftActionManager.current_action == 2 && rightActionManager.current_action == 2 && goal_reached) || (delta_time > 10)
         leftActionManager.setCurrentAction("LST",  coop_sim.time);
         rightActionManager.setCurrentAction("RST",  coop_sim.time);
     end
 
-    % 6. Logging
+    % 5. Step the simulator (integrate velocities)
+    coop_sim.sim(q_dot_l, q_dot_r);
+
+    % 6. Send updated state to Pybullet
+    robot_udp.send(t,coop_sim)
+
+    % 7. Logging
     logger.update(coop_sim.time,coop_sim.loopCounter)
     coop_sim.time;
-    % 7. Optional real-time slowdown
+    % 8. Optional real-time slowdown
     SlowdownToRealtime(dt);
 end
-% Display joint position and velocity, Display for a given action, a number
-% of tasks
+% Display joint position and velocity, Display for a given action, a number of tasks
 action=1;
 tasks=[1];
 logger.plotAll(action,tasks);

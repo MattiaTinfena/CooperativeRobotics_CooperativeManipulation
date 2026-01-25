@@ -36,7 +36,6 @@ classdef ActionManager < handle
         end
 
         function [ydotbar] = computeICAT(obj, robot, time, additional_task)
-            % Get current action
 
             ap = {};
             if (obj.action_changes == 0)
