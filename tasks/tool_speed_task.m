@@ -1,12 +1,10 @@
-classdef cooperative_rigid_constraint_task < Task
+classdef tool_speed_task < Task
     properties
-        xt_dot_coop;
-        C;
-        Hrl;
+        xt_dot;
     end
 
     methods
-        function obj=cooperative_rigid_constraint_task(robot_ID,taskID, smooth)
+        function obj=tool_speed_task(robot_ID,taskID, smooth)
             obj.ID=robot_ID;
             obj.task_name=taskID;
             obj.smooth=smooth;
@@ -14,8 +12,7 @@ classdef cooperative_rigid_constraint_task < Task
 
         function updateReference(obj, robot_system)
 
-            xt_dot_feas = obj.Hrl * (eye(12)-(pinv(obj.C) * obj.C)) * [obj.xt_dot_coop; obj.xt_dot_coop];
-            obj.xdotbar = xt_dot_feas(1:6);
+            obj.xdotbar = obj.xt_dot(1:6);
         end
 
         function updateJacobian(obj,robot_system)

@@ -43,7 +43,6 @@ classdef ActionManager < handle
                     ap{end + 1} = 1;
                 end
             else
-
                 if(length(obj.ap_instructions) == length(obj.tasks))
                     for i = 1:length(obj.tasks)
                         if(obj.ap_instructions(i) == 1)
@@ -59,7 +58,7 @@ classdef ActionManager < handle
                         end
                     end
                 else
-                    disp("Error in computing ap_instructions")
+                    error("Error in computing ap_instructions")
                 end
 
                 % when gaussian transitory is ended
@@ -152,15 +151,6 @@ classdef ActionManager < handle
             obj.ap_instructions(~in_act &  in_prev) = -1;
 
             obj.ap_instructions = obj.ap_instructions(tf_all);
-
-            disp(act_tags)
-            disp(prev_tags)
-            disp(all_tags)
-            disp(obj.ap_instructions)
-
-
-
         end
-
     end
 end

@@ -36,7 +36,7 @@ arm1.setGoal(w_obj_pos, w_obj_ori, w_obj_pos - [obj_length/2; 0; 0],arm1.wTt(1:3
 arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3, 1:3) * rotation(0, deg2rad(20), 0));
 
 %Define Object goal frame (Cooperative Motion)
-wTog=[rotation(0.0, 0.0, 0.0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+wTog=[rotation(0.0, 0.0, 0.0) [0.6, 0.4, 0.68]'; 0 0 0 1];
 arm1.set_obj_goal(wTog);
 arm2.set_obj_goal(wTog);
 
@@ -47,18 +47,18 @@ left_minimun_altitude_task=minimum_altitude_task("L","LMA",false);
 right_minimun_altitude_task=minimum_altitude_task("R","RMA",false);
 left_joint_limit_task=joint_limit_task("L","LJL",false);
 right_joint_limit_task=joint_limit_task("R","RJL",false);
-left_cooperative_rigid_constraint_task=cooperative_rigid_constraint_task("L", "LCRC", true);
-right_cooperative_rigid_constraint_task=cooperative_rigid_constraint_task("R", "RCRC", true);
+left_tool_speed_task=tool_speed_task("L", "LTS", true);
+right_tool_speed_task=tool_speed_task("R", "RTS", true);
 left_move_object_task = move_object_task("L", "LMO", false);
 right_move_object_task = move_object_task("R", "RMO", false);
 left_stp_joints_task = stop_joints_task("L","LSJ",false);
 right_stp_joints_task = stop_joints_task("R","RSJ",false);
 
-left_task_list = {left_tool_task, left_minimun_altitude_task, left_joint_limit_task, left_cooperative_rigid_constraint_task, left_move_object_task, left_stp_joints_task};
-left_task_list_name = ["LTT", "LMAT", "LJLT", "LCRCT", "LMOT", "LSJT"];
+left_task_list = {left_tool_task, left_minimun_altitude_task, left_joint_limit_task, left_tool_speed_task, left_move_object_task, left_stp_joints_task};
+left_task_list_name = ["LTT", "LMAT", "LJLT", "LTST", "LMOT", "LSJT"];
 
-right_task_list = {right_tool_task, right_minimun_altitude_task, right_joint_limit_task, right_cooperative_rigid_constraint_task, right_move_object_task, right_stp_joints_task};
-right_task_list_name = ["RTT", "RMAT", "RJLT", "RCRCT", "RMOT", "RSJT"];
+right_task_list = {right_tool_task, right_minimun_altitude_task, right_joint_limit_task, right_tool_speed_task, right_move_object_task, right_stp_joints_task};
+right_task_list_name = ["RTT", "RMAT", "RJLT", "RTST", "RMOT", "RSJT"];
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
 left_move_to = ["LJLT", "LMAT", "LTT"];
@@ -105,10 +105,31 @@ for t = 0:dt:end_time
         coop_sim.right_arm.q=qr;
     end
 
-    % 2. Update Full kinematics of the bimanual system
+    % 2. Action switching
+    goal_reached = norm(coop_sim.left_arm.rot_to_goal) < 0.01 && norm(coop_sim.left_arm.dist_to_goal) < 0.01 && ...
+        norm(coop_sim.right_arm.rot_to_goal) < 0.01 && norm(coop_sim.right_arm.dist_to_goal) < 0.01;
+
+    delta_time = coop_sim.time - initial_time;
+
+    if leftActionManager.current_action == 1 && rightActionManager.current_action == 1 && goal_reached
+
+        leftActionManager.setCurrentAction("LMO", coop_sim.time);
+        rightActionManager.setCurrentAction("RMO", coop_sim.time);
+
+        coop_sim.left_arm.tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
+        coop_sim.right_arm.tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
+
+        initial_time = coop_sim.time;
+
+    elseif (leftActionManager.current_action == 2 && rightActionManager.current_action == 2 && goal_reached) || (delta_time > 10)
+        leftActionManager.setCurrentAction("LST", coop_sim.time);
+        rightActionManager.setCurrentAction("RST", coop_sim.time);
+    end
+
+    % 3. Update Full kinematics of the bimanual system
     coop_sim.update_full_kinematics();
 
-    % 3. Compute control commands for current action
+    % 4. Compute control commands for current action
     [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time);
     [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time);
 
@@ -137,41 +158,16 @@ for t = 0:dt:end_time
 
         C = [Hl, -Hr];
         Hrl = [Hl, zeros(6); zeros(6), Hr];
+        xt_dot_feas = Hrl * (eye(12)-(pinv(C) * C)) * [xt_dot_coop; xt_dot_coop];
 
         % Simulation of the communication to the 2 robots
-        left_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
-        left_cooperative_rigid_constraint_task.C = C;
-        left_cooperative_rigid_constraint_task.Hrl = Hrl;
-
-        right_cooperative_rigid_constraint_task.xt_dot_coop = xt_dot_coop;
-        right_cooperative_rigid_constraint_task.C = C;
-        right_cooperative_rigid_constraint_task.Hrl = Hrl;
+        left_tool_speed_task.xt_dot = xt_dot_feas;
+        right_tool_speed_task.xt_dot = xt_dot_feas;
 
         % Compute control commands for current action
-        [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time, "LCRCT");
-        [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time, "RCRCT");
+        [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time, "LTST");
+        [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time, "RTST");
 
-    end
-
-    % 4. Action switching
-    goal_reached = norm(coop_sim.left_arm.rot_to_goal) < 0.01 && norm(coop_sim.left_arm.dist_to_goal) < 0.01 && ...
-        norm(coop_sim.right_arm.rot_to_goal) < 0.01 && norm(coop_sim.right_arm.dist_to_goal) < 0.01;
-
-    delta_time = coop_sim.time - initial_time;
-
-    if leftActionManager.current_action == 1 && rightActionManager.current_action == 1 && goal_reached
-
-        leftActionManager.setCurrentAction("LMO",  coop_sim.time);
-        rightActionManager.setCurrentAction("RMO",  coop_sim.time);
-
-        coop_sim.left_arm.tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
-        coop_sim.right_arm.tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
-
-        initial_time = coop_sim.time;
-
-    elseif (leftActionManager.current_action == 2 && rightActionManager.current_action == 2 && goal_reached) || (delta_time > 10)
-        leftActionManager.setCurrentAction("LST",  coop_sim.time);
-        rightActionManager.setCurrentAction("RST",  coop_sim.time);
     end
 
     % 5. Step the simulator (integrate velocities)
