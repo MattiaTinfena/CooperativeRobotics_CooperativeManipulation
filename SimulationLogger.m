@@ -29,7 +29,6 @@ classdef SimulationLogger < handle
             end
 
             obj.xdotbar_task=cell(length(action_set.actions), max(l), maxLoops);
-            
         end
 
         function update(obj, t, loop)
@@ -45,44 +44,43 @@ classdef SimulationLogger < handle
                     obj.xdotbar_task{i,j,loop}=obj.action_set.actions{i}{j}.xdotbar;
                 end
             end
-
-
         end
-        function plotAll(obj,action,task)
-                % Example plotting for robot state
-                figure(1);
-                subplot(2,1,1);
-                title('Left arm motion');
-                plot(obj.t, obj.ql, 'LineWidth', 2);
-                legend('q_1','q_2','q_3','q_4','q_5','q_6','q_7');
-                subplot(2,1,2);
-                plot(obj.t, obj.qdotl, 'LineWidth', 2);
-                legend('qd_1','qd_2','qd_3','qd_4','qd_5','qd_6','qd_7');
-                figure(2);
-                title('Right arm motion');    
-                subplot(2,1,1);
-                plot(obj.t, obj.qr, 'LineWidth', 2);
-                legend('q_1','q_2','q_3','q_4','q_5','q_6','q_7');
-                subplot(2,1,2);
-                plot(obj.t, obj.qdotr, 'LineWidth', 2);
-                legend('qd_1','qd_2','qd_3','qd_4','qd_5','qd_6','qd_7');
 
-                % Optional: plot a number of tasks from an specific action set
-                figure(3);
-                s=squeeze(obj.xdotbar_task(action,:,:));
-                nt=length(task);
-                title(strcat('Action Set'," ",num2str(action)));  
-                for i=1:nt
-                    subplot(1,nt,i)
-                    data=cell2mat(s(task(i),:));
-                    plot(obj.t(1,1:end-1),data','.-')
-                    grid on
-                    if(obj.action_set.actions{action}{task(i)}.task_name=="T")
-                        legend('wx','wy','wz','vx','vy','vz');
-                    end
-                    title([strcat('Robot'," ",obj.action_set.actions{action}{task(i)}.ID," ",'Task'," ",num2str(task(i))," ",obj.action_set.actions{action}{task(i)}.task_name)]);
+        function plotAll(obj,action,task)
+            % Example plotting for robot state
+            figure(1);
+            subplot(2,1,1);
+            title('Left arm motion');
+            plot(obj.t, obj.ql, 'LineWidth', 2);
+            legend('q_1','q_2','q_3','q_4','q_5','q_6','q_7');
+            subplot(2,1,2);
+            plot(obj.t, obj.qdotl, 'LineWidth', 2);
+            legend('qd_1','qd_2','qd_3','qd_4','qd_5','qd_6','qd_7');
+            figure(2);
+            title('Right arm motion');
+            subplot(2,1,1);
+            plot(obj.t, obj.qr, 'LineWidth', 2);
+            legend('q_1','q_2','q_3','q_4','q_5','q_6','q_7');
+            subplot(2,1,2);
+            plot(obj.t, obj.qdotr, 'LineWidth', 2);
+            legend('qd_1','qd_2','qd_3','qd_4','qd_5','qd_6','qd_7');
+
+            % Optional: plot a number of tasks from an specific action set
+            figure(3);
+            s=squeeze(obj.xdotbar_task(action,:,:));
+            nt=length(task);
+            title(strcat('Action Set'," ",num2str(action)));
+            for i=1:nt
+                subplot(1,nt,i)
+                data=cell2mat(s(task(i),:));
+                plot(obj.t(1,1:end-1),data','.-')
+                grid on
+                if(obj.action_set.actions{action}{task(i)}.task_name=="T")
+                    legend('wx','wy','wz','vx','vy','vz');
                 end
+                title([strcat('Robot'," ",obj.action_set.actions{action}{task(i)}.ID," ",'Task'," ",num2str(task(i))," ",obj.action_set.actions{action}{task(i)}.task_name)]);
             end
+        end
 
     end
 end

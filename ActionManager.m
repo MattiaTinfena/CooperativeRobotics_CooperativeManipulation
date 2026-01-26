@@ -37,24 +37,23 @@ classdef ActionManager < handle
 
         function [ydotbar] = computeICAT(obj, robot, time, additional_task)
 
-            ap = {};
             if (obj.action_changes == 0)
                 for i = 1:length(obj.tasks)
-                    ap{end + 1} = 1;
+                    obj.tasks{i}.ap = 1;
                 end
             else
                 if(length(obj.ap_instructions) == length(obj.tasks))
                     for i = 1:length(obj.tasks)
                         if(obj.ap_instructions(i) == 1)
                             if(obj.tasks{i}.smooth)
-                                ap{end + 1} = IncreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
+                                obj.tasks{i}.ap = IncreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
                             else
-                                ap{end + 1} = 1;
+                                obj.tasks{i}.ap = 1;
                             end
                         elseif(obj.ap_instructions(i) == -1)
-                            ap{end + 1} = DecreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
+                            obj.tasks{i}.ap = DecreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
                         else
-                            ap{end + 1} = 1;
+                            obj.tasks{i}.ap = 1;
                         end
                     end
                 else
@@ -65,17 +64,15 @@ classdef ActionManager < handle
                 if (time > obj.initial_time + 2)
 
                     obj.tasks = obj.actions{obj.current_action};
-                    disp(obj.tasks);
+                    % disp(obj.tasks);
                     obj.action_changes = 0;
-                    ap = {};
                     for i = 1:length(obj.tasks)
-                        ap{end + 1} = 1;
+                        obj.tasks{i}.ap = 1;
                     end
                 end
             end
 
             tasks_to_run = {};
-            ap_to_run = {};
 
             if (nargin == 4)
 
@@ -85,14 +82,13 @@ classdef ActionManager < handle
 
                     coop_task = obj.all_task_list{coop_task_id};
                     tasks_to_run = [{coop_task}, obj.tasks];
-                    ap_to_run    = [{1}, ap];
+                    coop_task.ap = 1;
                 else
                     error("Not existing task");
                 end
 
             else
                 tasks_to_run = obj.tasks;
-                ap_to_run    = ap;
             end
 
             % 1. Update references, Jacobians, activations
@@ -106,7 +102,7 @@ classdef ActionManager < handle
             ydotbar = zeros(7,1);
             Qp = eye(7);
             for i = 1:length(tasks_to_run)
-                [Qp, ydotbar] = iCAT_task(tasks_to_run{i}.A * ap_to_run{i}, tasks_to_run{i}.J, ...
+                [Qp, ydotbar] = iCAT_task(tasks_to_run{i}.A * tasks_to_run{i}.ap, tasks_to_run{i}.J, ...
                     Qp, ydotbar, tasks_to_run{i}.xdotbar, ...
                     1e-4, 0.01, 10);
             end
