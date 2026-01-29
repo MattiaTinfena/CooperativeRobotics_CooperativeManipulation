@@ -1,10 +1,10 @@
 classdef ActionManager < handle
     properties
-        actions = {}      % cell array of actions (each action = stack of tasks)
-        actionsTest = {}      % cell array of actions (each action = stack of tasks)
+        actions = {}
+        actionsTest = {}
         actions_tag = {}
         actions_names = {}
-        current_action = 1 % index of currently active action
+        current_action = 1
         previous_action = 1
         action_changes = 0
         action_switch_time = {}
@@ -82,7 +82,11 @@ classdef ActionManager < handle
 
                     coop_task = obj.all_task_list{coop_task_id};
                     tasks_to_run = [{coop_task}, obj.tasks];
-                    coop_task.ap = 1;
+                    if obj.current_action == 2
+                        coop_task.ap = 1;
+                    elseif obj.current_action == 3
+                        coop_task.ap = DecreasingBellShapedFunction(obj.initial_time, obj.initial_time +2, 0, 1, time);
+                    end
                 else
                     error("Not existing task");
                 end
@@ -132,7 +136,10 @@ classdef ActionManager < handle
             act_tags  = obj.actions_tag{obj.current_action};
             prev_tags = obj.actions_tag{obj.previous_action};
 
-            all_tags = unique([prev_tags, act_tags], 'stable');
+
+            union_tags = union(act_tags, prev_tags);
+            mask_involved = ismember(obj.all_task_names, union_tags);
+            all_tags = obj.all_task_names(mask_involved);
 
             [tf_all, idx_all] = ismember(all_tags, obj.all_task_names);
             obj.tasks = obj.all_task_list(idx_all(tf_all));
@@ -141,12 +148,9 @@ classdef ActionManager < handle
             in_prev = ismember(all_tags, prev_tags);
 
             obj.ap_instructions = zeros(1, numel(all_tags));
-
             obj.ap_instructions( in_act &  in_prev) =  0;
             obj.ap_instructions( in_act & ~in_prev) = +1;
             obj.ap_instructions(~in_act &  in_prev) = -1;
-
-            obj.ap_instructions = obj.ap_instructions(tf_all);
         end
     end
 end

@@ -19,11 +19,12 @@ classdef minimum_altitude_task < Task
             robot.alt = robot.wTt(3,4);
 
             if size(robot.alt) == 1
-                obj.xdotbar = -0.2 * max(0, (0.15 - robot.alt));
+                obj.xdotbar = 0.2 * max(0, (0.2 - robot.alt));
             else
                 obj.xdotbar = 0;
             end
             obj.xdotbar = Saturate(obj.xdotbar, 0.2);
+            disp(obj.xdotbar)
         end
 
         function updateJacobian(obj,robot_system)

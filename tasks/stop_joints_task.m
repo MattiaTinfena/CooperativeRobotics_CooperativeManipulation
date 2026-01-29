@@ -12,16 +12,16 @@ classdef stop_joints_task < Task
 
         function updateReference(obj, robot_system)
 
-            obj.xdotbar = zeros(6,1);
+            obj.xdotbar = zeros(7,1);
         end
 
         function updateJacobian(obj,robot_system)
 
-            obj.J = zeros(6, 7);
+            obj.J = eye(7);
         end
 
         function updateActivation(obj, robot_system)
-            obj.A = eye(6);
+            obj.A = eye(7);
         end
     end
 end

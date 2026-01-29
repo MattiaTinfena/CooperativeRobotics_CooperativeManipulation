@@ -7,7 +7,7 @@ addpath('./tasks')
 clc;clear;close all;
 %Simulation Parameters
 dt = 0.005;
-end_time = 25;
+end_time = 20;
 
 % Initialize Franka Emika Panda Model
 model = load("panda.mat");
@@ -37,28 +37,30 @@ arm2.setGoal(w_obj_pos, w_obj_ori, w_obj_pos + [obj_length/2; 0; 0],arm2.wTt(1:3
 
 %Define Object goal frame (Cooperative Motion)
 wTog=[rotation(0.0, 0.0, 0.0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+% wTog=[rotation(0.0, deg2rad(5), 0) [0.4, 0, 0]'; 0 0 0 1]; % To stress the system
+
 arm1.set_obj_goal(wTog);
 arm2.set_obj_goal(wTog);
 
-%Define Tasks, input values(Robot type(L,R,BM), Task Name)
-left_tool_task=tool_task("L","LT",false);
-right_tool_task=tool_task("R","RT",false);
-left_minimun_altitude_task=minimum_altitude_task("L","LMA",false);
-right_minimun_altitude_task=minimum_altitude_task("R","RMA",false);
-left_joint_limit_task=joint_limit_task("L","LJL",false);
-right_joint_limit_task=joint_limit_task("R","RJL",false);
-left_tool_speed_task=tool_speed_task("L", "LTS", true);
-right_tool_speed_task=tool_speed_task("R", "RTS", true);
-left_move_object_task = move_object_task("L", "LMO", false);
-right_move_object_task = move_object_task("R", "RMO", false);
-left_stp_joints_task = stop_joints_task("L","LSJ",false);
-right_stp_joints_task = stop_joints_task("R","RSJ",false);
+%Define Tasks, input values(Robot type(L,R,BM), Task Name, smoothness)
+left_tool_task=tool_task("L","LT",true);
+right_tool_task=tool_task("R","RT",true);
+left_minimun_altitude_task=minimum_altitude_task("L","LMA",true);
+right_minimun_altitude_task=minimum_altitude_task("R","RMA",true);
+left_joint_limit_task=joint_limit_task("L","LJL",true);
+right_joint_limit_task=joint_limit_task("R","RJL",true);
+left_tool_speed_task=tool_speed_task("L", "LTS", false);
+right_tool_speed_task=tool_speed_task("R", "RTS", false);
+left_move_object_task = move_object_task("L", "LMO", true);
+right_move_object_task = move_object_task("R", "RMO", true);
+left_stp_joints_task = stop_joints_task("L","LSJ",true);
+right_stp_joints_task = stop_joints_task("R","RSJ",true);
 
-left_task_list = {left_tool_task, left_minimun_altitude_task, left_joint_limit_task, left_tool_speed_task, left_move_object_task, left_stp_joints_task};
-left_task_list_name = ["LTT", "LMAT", "LJLT", "LTST", "LMOT", "LSJT"];
+left_task_list = {left_tool_speed_task, left_joint_limit_task, left_minimun_altitude_task, left_stp_joints_task, left_move_object_task, left_tool_task};
+left_task_list_name = ["LTST", "LJLT", "LMAT", "LSJT", "LMOT", "LTT"];
 
-right_task_list = {right_tool_task, right_minimun_altitude_task, right_joint_limit_task, right_tool_speed_task, right_move_object_task, right_stp_joints_task};
-right_task_list_name = ["RTT", "RMAT", "RJLT", "RTST", "RMOT", "RSJT"];
+right_task_list = {right_tool_speed_task, right_joint_limit_task, right_minimun_altitude_task, right_stp_joints_task, right_move_object_task, right_tool_task};
+right_task_list_name = ["RTST", "RJLT", "RMAT", "RSJT", "RMOT", "RTT"];
 
 %Actions for each phase: go to phase, coop_motion phase, end_motion phase
 left_move_to = ["LJLT", "LMAT", "LTT"];
@@ -93,7 +95,8 @@ initial_time = coop_sim.time;
 robot_udp=UDP_interface(real_robot);
 
 %Initialize logger
-logger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,leftActionManager);
+leftLogger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,leftActionManager);
+rightLogger=SimulationLogger(ceil(end_time/dt)+1,coop_sim,rightActionManager);
 
 %Main simulation Loop
 for t = 0:dt:end_time
@@ -112,7 +115,9 @@ for t = 0:dt:end_time
     [q_dot_l]=leftActionManager.computeICAT(coop_sim,coop_sim.time);
     [q_dot_r]=rightActionManager.computeICAT(coop_sim,coop_sim.time);
 
-    if(leftActionManager.current_action == 2 && rightActionManager.current_action == 2)
+
+    if(leftActionManager.current_action == 2 && rightActionManager.current_action == 2) || ...
+            (leftActionManager.current_action == 3 && rightActionManager.current_action == 3)
         % Implementation of the Coordination Policy
         l_xt_dot_non_coop = coop_sim.left_arm.wJt * q_dot_l;
         r_xt_dot_non_coop = coop_sim.right_arm.wJt * q_dot_r;
@@ -156,14 +161,18 @@ for t = 0:dt:end_time
     robot_udp.send(t,coop_sim)
 
     % 6. Logging
-    logger.update(coop_sim.time,coop_sim.loopCounter)
+    leftLogger.update(coop_sim.time,coop_sim.loopCounter)
+    rightLogger.update(coop_sim.time,coop_sim.loopCounter)
+
     coop_sim.time;
     % 7. Optional real-time slowdown
     SlowdownToRealtime(dt);
 
     % 8. Action switching
-    goal_reached = norm(coop_sim.left_arm.rot_to_goal) < 0.01 && norm(coop_sim.left_arm.dist_to_goal) < 0.01 && ...
-        norm(coop_sim.right_arm.rot_to_goal) < 0.01 && norm(coop_sim.right_arm.dist_to_goal) < 0.01;
+    goal_reached = norm(coop_sim.left_arm.rot_to_goal) < 0.01 && norm(coop_sim.left_arm.dist_to_goal) < 0.001 && ...
+        norm(coop_sim.right_arm.rot_to_goal) < 0.01 && norm(coop_sim.right_arm.dist_to_goal) < 0.001;
+    goal_reached2 = norm(coop_sim.left_arm.rot_to_goal2) < 0.01 && norm(coop_sim.left_arm.dist_to_goal2) < 0.001 && ...
+        norm(coop_sim.right_arm.rot_to_goal2) < 0.01 && norm(coop_sim.right_arm.dist_to_goal2) < 0.001;
 
     delta_time = coop_sim.time - initial_time;
 
@@ -174,15 +183,15 @@ for t = 0:dt:end_time
 
         coop_sim.left_arm.tTo = pinv(coop_sim.left_arm.wTt) * coop_sim.left_arm.wTo;
         coop_sim.right_arm.tTo = pinv(coop_sim.right_arm.wTt) * coop_sim.right_arm.wTo;
-
         initial_time = coop_sim.time;
 
-    elseif (leftActionManager.current_action == 2 && rightActionManager.current_action == 2 && goal_reached) || (delta_time > 10)
+    elseif (leftActionManager.current_action == 2 && rightActionManager.current_action == 2 && goal_reached2) || (delta_time > 10)
         leftActionManager.setCurrentAction("LST", coop_sim.time);
         rightActionManager.setCurrentAction("RST", coop_sim.time);
+        initial_time = coop_sim.time;
     end
 end
 % Display joint position and velocity, Display for a given action, a number of tasks
-action=1;
-tasks=[1 2 3];
-logger.plotAll(action,tasks);
+
+leftLogger.plotAll(0);
+rightLogger.plotAll(500);
